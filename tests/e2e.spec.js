@@ -121,14 +121,14 @@ test.describe('Protected Routes', () => {
 
 test.describe('Bottom Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${BASE}/login`, { waitUntil: 'commit', timeout: 8000 })
     await page.waitForTimeout(2000)
     // Manually set mock auth in localStorage then go home
     await page.evaluate(() => {
       localStorage.setItem('firebase:auth:loggedIn', 'true')
       localStorage.setItem('mockUser', JSON.stringify({ uid: 'test-uid', email: 'demo@uob.com', displayName: 'Hafeez Demo' }))
     })
-    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${BASE}/`, { waitUntil: 'commit', timeout: 8000 })
     await page.waitForTimeout(1500)
   })
 
