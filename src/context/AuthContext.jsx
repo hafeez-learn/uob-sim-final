@@ -1,35 +1,39 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { mockAuth, mockUser, mockSignInWithEmailAndPassword, mockCreateUserWithEmailAndPassword, mockSignOut } from '../lib/mockAuth'
+import { initFirebase, isDemoMode } from '../lib/firebase'
+import {
+  mockUser,
+  mockSignInWithEmailAndPassword,
+  mockCreateUserWithEmailAndPassword,
+  mockSignOut
+} from '../lib/mockAuth'
 
 const AuthContext = createContext({})
 export const useAuth = () => useContext(AuthContext)
 
-// Demo when VITE_MOCK_USER is set OR when Firebase key is absent/demo/placeholder
-const DEMO_MODE =
-  import.meta.env.VITE_MOCK_USER === 'true' ||
-  !import.meta.env.VITE_FIREBASE_API_KEY ||
-  import.meta.env.VITE_FIREBASE_API_KEY === 'demo' ||
-  import.meta.env.VITE_FIREBASE_API_KEY === '***'
-
-const _initialUser = DEMO_MODE ? mockUser : null
+const _initialUser = isDemoMode ? mockUser : null
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(_initialUser)
-  const [loading, setLoading] = useState(DEMO_MODE ? false : true)
+  const [loading, setLoading] = useState(isDemoMode ? false : true)
 
   useEffect(() => {
-    if (DEMO_MODE) return // user already set synchronously — no Firebase SDK needed
+    if (isDemoMode) return
 
-    // Real Firebase auth — wrapped to never crash
     let mounted = true
     let timer = setTimeout(() => {
       if (mounted) { setUser(null); setLoading(false) }
     }, 10000)
 
-    import('firebase/auth').then(({ onAuthStateChanged }) => {
-      import('../lib/firebase').then(({ auth }) => {
+    const init = async () => {
+      try {
+        const [{ onAuthStateChanged }, firebase] = await Promise.all([
+          import('firebase/auth'),
+          initFirebase(),
+        ])
         if (!mounted) return
-        unsubscribe = onAuthStateChanged(
+        const { auth } = firebase
+        if (!auth) { setLoading(false); return }
+        const unsubscribe = onAuthStateChanged(
           auth,
           (firebaseUser) => {
             if (mounted) {
@@ -40,12 +44,14 @@ export const AuthProvider = ({ children }) => {
           },
           () => { if (mounted) { clearTimeout(timer); setUser(null); setLoading(false) } }
         )
-      })
-    }).catch(() => {
-      if (mounted) { clearTimeout(timer); setUser(null); setLoading(false) }
-    })
+        return unsubscribe
+      } catch {
+        if (mounted) { clearTimeout(timer); setUser(null); setLoading(false) }
+      }
+    }
 
     let unsubscribe = () => {}
+    init().then(fn => { if (fn) unsubscribe = fn })
     return () => { mounted = false; clearTimeout(timer); unsubscribe() }
   }, [])
 
